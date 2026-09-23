@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {readApiResponse} from '../lib/http-client.ts';
+assert.deepEqual(await readApiResponse(Response.json({ok:true})), {ok:true});
+await assert.rejects(readApiResponse(new Response('',{status:500})), /HTTP 500/);
+await assert.rejects(readApiResponse(new Response('<html>Unavailable</html>',{status:502})), /HTTP 502/);
+await assert.rejects(readApiResponse(new Response('',{status:200})), /пустой или некорректный/);
+await assert.rejects(readApiResponse(new Response('{"cut":',{status:200})), /пустой или некорректный/);
+await assert.rejects(readApiResponse(Response.json(null)), /пустой или некорректный/);
+await assert.rejects(readApiResponse(new Response('',{status:401})), /подтвердить доступ/);
+await assert.rejects(readApiResponse(Response.json({error:{message:'Недостаточно товара'}},{status:409})), /Недостаточно товара/);
+console.log('PASS: JSON success, empty 500, HTML 502, empty/truncated/null success, auth errors and application errors');

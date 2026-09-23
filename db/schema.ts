@@ -1,0 +1,8 @@
+import {sqliteTable,text,integer,real,primaryKey,index} from 'drizzle-orm/sqlite-core';
+export const sessions=sqliteTable('sessions',{id:text('id').primaryKey(),lastProduct:text('last_product'),created:integer('created').notNull(),expires:integer('expires').notNull()});
+export const proposals=sqliteTable('proposals',{id:text('id').primaryKey(),sessionId:text('session_id').notNull(),productId:text('product_id').notNull(),productJson:text('product_json').notNull(),quantity:integer('quantity').notNull(),price:real('price').notNull(),status:text('status').notNull(),operationToken:text('operation_token'),expires:integer('expires').notNull(),created:integer('created').notNull()},t=>[index('idx_proposals_session').on(t.sessionId)]);
+export const cart=sqliteTable('cart',{sessionId:text('session_id').notNull(),productId:text('product_id').notNull(),productJson:text('product_json').notNull(),quantity:integer('quantity').notNull()},t=>[primaryKey({columns:[t.sessionId,t.productId]})]);
+export const messages=sqliteTable('messages',{id:text('id').primaryKey(),sessionId:text('session_id').notNull(),role:text('role').notNull(),contentJson:text('content_json').notNull(),created:integer('created').notNull()},t=>[index('idx_messages_session_created').on(t.sessionId,t.created)]);
+export const productDetails=sqliteTable('product_details',{id:text('id').primaryKey(),payload:text('payload').notNull(),updated:integer('updated').notNull()});
+export const catalogPages=sqliteTable('catalog_pages',{page:integer('page').primaryKey(),payload:text('payload').notNull(),updated:integer('updated').notNull()});
+export const agentLocks=sqliteTable('agent_locks',{sessionId:text('session_id').primaryKey(),token:text('token').notNull(),expires:integer('expires').notNull()});

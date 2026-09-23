@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import {runAgent,validateTool,agentTools} from '../lib/agent.ts';
+import {normalize} from '../lib/catalog.ts';
+import {agentSearch} from '../lib/agent-search.ts';
+const p=normalize({id:123,name:'Автомат 25А',article:'test',price:100,url:'https://ekt.kz/catalog/test',quantity:10});
+const other=normalize({id:456,name:'Автомат 125А',article:'test2',price:200,url:'https://ekt.kz/catalog/test2',quantity:0});
+assert.equal(agentSearch([p,other],'автомат 25 А',null,false).total,1);
+assert.equal(agentSearch([p,other],'автомат',150,true).total,1);
+assert.throws(()=>validateTool('confirm_cart',{}));
+assert.throws(()=>validateTool('prepare_cart',{id:'123',quantity:0}));
+assert.throws(()=>validateTool('get_product',{id:'https://evil.example'}));
+assert.throws(()=>validateTool('compare_products',{ids:['123','123']}));
+assert.throws(()=>validateTool('get_product',{id:'123',session:'other'}));
+assert(!agentTools.some(t=>/confirm|delete|pay/.test(t.name)));
+const calls=[];let prepared=0;
+const services={search:async()=>({items:[p],total:1}),detail:async()=>p,alternatives:async()=>({items:[],message:'No matches'}),cart:async()=>({items:[]}),prepare:async()=>{prepared++;return {id:'proposal',product:p,quantity:2};}};
+const call=(name,args)=>({type:'function_call',call_id:crypto.randomUUID(),name,arguments:JSON.stringify(args)});
+let outputs=[call('get_product',{id:'123'}),call('prepare_cart',{id:'123',quantity:2}),call('finish',{text:'Подтвердите предложение.',productIds:['123'],suggestions:[]})];
+const transport=async(url,options)=>{assert.equal(url,'https://api.openai.com/v1/responses');const body=JSON.parse(options.body);assert.equal(body.store,false);calls.push(body);return Response.json({status:'completed',output:[outputs.shift()]});};
+const config={key:'test',model:'test',history:[{role:'user',content:'Подготовь две штуки'}],context:null,services,transport};
+const result=await runAgent(config);
+assert.equal(result.proposal.quantity,2);assert.equal(prepared,1);assert.equal(result.steps.length,2);
+assert(calls[1].input.some(i=>i.type==='function_call_output'));
+// Unknown IDs cannot be rendered as real cards, model must repair the answer.
+outputs=[call('finish',{text:'Invented',productIds:['999'],suggestions:[]}),call('finish',{text:'Нужно уточнение',productIds:[],suggestions:[]})];
+assert.equal((await runAgent(config)).text,'Нужно уточнение');
+// A forged model tool cannot mutate the basket.
+outputs=[call('confirm_cart',{id:'proposal'}),call('finish',{text:'Подтвердите кнопкой',productIds:[],suggestions:[]})];
+assert.equal((await runAgent(config)).steps[0].ok,false);assert.equal(prepared,1);
+await assert.rejects(runAgent({...config,transport:async()=>Response.json({error:{code:'insufficient_quota'}},{status:429})}),/AGENT_QUOTA/);
+await assert.rejects(runAgent({...config,transport:async()=>Response.json({status:'completed',output:[]})}),/AGENT_NO_RESULT/);
+console.log('PASS agent: numeric filters, tool validation, bounded actions, output provenance, confirmation separation, quota handling');
