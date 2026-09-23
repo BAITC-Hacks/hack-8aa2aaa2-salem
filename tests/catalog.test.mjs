@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {normalize,validateQuantity,matchingAlternatives,demoStock,searchProducts,safeUrl} from '../lib/catalog.ts';
+import {normalize,validateQuantity,matchingAlternatives,demoStock,searchProducts,safeUrl,apiNumber,mergeCatalogSnapshots} from '../lib/catalog.ts';
 const raw={id:1,name:'Автомат 160А',article:'SKU',price:100,url:'https://ekt.kz/catalog/item',description:'',quantity:10,stores:[{id:1,name:'Алматы',quantity:7},{id:2,name:'Брак',quantity:3}],properties:{NOMINALNYY_TOK:'250 А'}};
 const p=normalize(raw);
 assert.equal(p.conflict,true,'Conflicting rated current must be flagged');
@@ -19,3 +19,15 @@ assert.deepEqual(matchingAlternatives(good,[compatible,incompatible]).map(p=>p.i
 assert.deepEqual(matchingAlternatives(good,[normalize({...raw,id:4,properties:{}})]),[]);
 console.log('PASS: conflicts, normalization, quantity validation, stock exclusion, exact search, safe URLs, candidate constraints');
 assert.equal(searchProducts([normalize({...raw,name:'LED STARK'})],'лампочки').length,1);
+for(const value of [null,undefined,'',' ',false,NaN,Infinity,-1,'1oops'])assert.equal(apiNumber(value),null);
+assert.equal(apiNumber('12,5'),12.5);
+assert.equal(apiNumber(0),0);
+assert.equal(normalize({...raw,price:null,quantity:undefined}).price,null,'Missing price is not zero');
+assert.equal(demoStock(normalize({...raw,quantity:1,stores:[{id:1,name:'Алматы',quantity:7}]})),0,'Inconsistent stock is blocked');
+assert.equal(demoStock(normalize({...raw,quantity:null})),0,'Unknown aggregate stock cannot be inferred from warehouses');
+assert.equal(demoStock(normalize({...raw,quantity:10,stores:[{id:1,name:'Алматы',quantity:2},{id:2,name:'Маркетинг',quantity:8}]})),2,'Service stock is not sellable stock');
+const snapshots=[{items:[{...raw,price:200}],updated:2000},{items:[{...raw,price:100}],updated:1000}];
+assert.equal(mergeCatalogSnapshots(snapshots)[0].price,200,'Older detail must not override newer data');
+assert.equal(mergeCatalogSnapshots(snapshots)[0].dataAsOf,new Date(2000).toISOString());
+assert.equal(mergeCatalogSnapshots(snapshots)[0].checkedAt,null,'Cached records must not claim live verification');
+assert.equal(searchProducts([normalize({...raw,name:'Автомат 125А'})],'25 А').length,0,'Catalog must not match 25A inside 125A');

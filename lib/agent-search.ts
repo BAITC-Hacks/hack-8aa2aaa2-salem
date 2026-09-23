@@ -5,7 +5,7 @@ export function agentSearch(products:Product[],query:string,maxPrice:number|null
  const tokens=q.split(/[\s,;]+/).filter(Boolean);
  const folded=(s:string)=>s.toLowerCase().replace(/ё/g,'е').replace(/(\d)\s+(а|a|в|v|w|вт)(?=$|[^a-zа-я])/gi,'$1$2');
  const matches=products.filter(p=>{
-  if(maxPrice!==null&&p.price>maxPrice)return false;
+  if(maxPrice!==null&&(p.price===null||p.price>maxPrice))return false;
   if(inStock&&demoStock(p)<=0)return false;
   const hay=folded(`${p.name} ${p.sku} ${p.manufacturerSku} ${p.brand} ${p.id}`);
   return tokens.every(t=>{
@@ -16,7 +16,7 @@ export function agentSearch(products:Product[],query:string,maxPrice:number|null
  });
  matches.sort((a,b)=>{
   const exact=(p:Product)=>[p.sku,p.manufacturerSku,p.id].some(v=>v.toLowerCase()===q)?1:0;
-  return exact(b)-exact(a)||(maxPrice!==null?a.price-b.price:0);
+  return exact(b)-exact(a)||(maxPrice!==null?(a.price??Infinity)-(b.price??Infinity):0);
  });
  return {items:matches.slice(0,8),total:matches.length};
 }
