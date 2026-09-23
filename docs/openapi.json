@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "ЭКТ Каталог API прототипа",
-    "version": "1.1.0",
-    "description": "Каталог ekt.kz через сервер. ИИ-агент использует проверяемые инструменты и историю сессии. Корзина тестовая; её изменение требует отдельного подтверждения. Вложения пока не поддерживаются."
+    "version": "1.2.0",
+    "description": "Каталог ekt.kz и агент подбора комплектов. Явный выбор готового варианта автоматически добавляет его в тестовую корзину. Реальные заказы не создаются."
   },
   "servers": [
     {
@@ -424,7 +424,7 @@
     },
     "/chat": {
       "post": {
-        "summary": "Детерминированный поиск и консультация по каталогу; не меняет корзину",
+        "summary": "Диалог, подбор полного решения и явный выбор варианта",
         "responses": {
           "200": {
             "description": "Успех",
@@ -498,6 +498,18 @@
                           }
                         }
                       }
+                    },
+                    "solution": {
+                      "$ref": "#/components/schemas/SolutionPlan"
+                    },
+                    "solutionReceipt": {
+                      "$ref": "#/components/schemas/SolutionPlan"
+                    },
+                    "cart": {
+                      "$ref": "#/components/schemas/Cart"
+                    },
+                    "replayed": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -542,7 +554,93 @@
             }
           }
         },
-        "description": "Агент сам выбирает инструменты; максимум 60 сообщений/час на сессию. Корзина не изменяется. Ответ может содержать предложение для отдельного подтверждения, карточки, сравнение и проверенные источники. 409 означает параллельный запрос; 429 — лимит сообщений."
+        "description": "Модель готовит варианты без изменения корзины. Точные фразы «Выбираю бюджетный» / «Выбираю расширенный» обрабатываются сервером как выбор последнего комплекта и добавляют его целиком. Одного «да» недостаточно. Подбор ограничен загруженной выборкой; максимум 6 обязательных позиций и 2 варианта. 60 модельных запросов/час; один одновременно. 409 — цена/остаток/состав изменились, 410 — подбор устарел."
+      }
+    },
+    "/solutions/{id}/select": {
+      "post": {
+        "summary": "Выбрать и атомарно добавить полный комплект",
+        "description": "Повторный выбор того же варианта идемпотентен. Другой вариант уже применённого плана не добавляется. Сервер повторно проверяет все цены, характеристики и остатки с учётом корзины. При несовпадении ни одна позиция не добавляется.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "optionKey",
+                  "confirmed"
+                ],
+                "properties": {
+                  "optionKey": {
+                    "enum": [
+                      "budget",
+                      "extended"
+                    ]
+                  },
+                  "confirmed": {
+                    "const": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Комплект добавлен или повторный запрос",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "text",
+                    "cart",
+                    "solutionReceipt",
+                    "replayed"
+                  ],
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    },
+                    "cart": {
+                      "$ref": "#/components/schemas/Cart"
+                    },
+                    "solutionReceipt": {
+                      "$ref": "#/components/schemas/SolutionPlan"
+                    },
+                    "replayed": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Чужая сессия или подбор не существует"
+          },
+          "409": {
+            "description": "Изменение данных, нехватка остатка или ранее выбран другой вариант"
+          },
+          "410": {
+            "description": "Подбор истёк или заменён"
+          },
+          "422": {
+            "description": "Нет явного выбора или неверный вариант"
+          }
+        }
       }
     }
   },
@@ -757,6 +855,201 @@
           "pages",
           "complete"
         ]
+      },
+      "Requirement": {
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "query",
+          "quantity",
+          "constraints"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "query": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000
+          },
+          "constraints": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "type": "object",
+              "required": [
+                "key",
+                "value"
+              ],
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "SolutionPlan": {
+        "type": "object",
+        "required": [
+          "id",
+          "goal",
+          "requirements",
+          "options",
+          "report",
+          "createdAt",
+          "expiresAt",
+          "status",
+          "scope"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "goal": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "applied",
+              "expired",
+              "superseded"
+            ]
+          },
+          "selectedKey": {
+            "enum": [
+              "budget",
+              "extended"
+            ]
+          },
+          "requirements": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 6,
+            "items": {
+              "$ref": "#/components/schemas/Requirement"
+            }
+          },
+          "options": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 2,
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "enum": [
+                    "budget",
+                    "extended"
+                  ]
+                },
+                "title": {
+                  "type": "string"
+                },
+                "summary": {
+                  "type": "string"
+                },
+                "tradeoffs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "total": {
+                  "type": "number"
+                },
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "product": {
+                        "$ref": "#/components/schemas/Product"
+                      },
+                      "quantity": {
+                        "type": "integer"
+                      },
+                      "requirementId": {
+                        "type": "string"
+                      },
+                      "reason": {
+                        "type": "string"
+                      },
+                      "subtotal": {
+                        "type": "number"
+                      },
+                      "evidence": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "label": {
+                              "type": "string"
+                            },
+                            "value": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "report": {
+            "type": "object",
+            "properties": {
+              "assessment": {
+                "type": "string"
+              },
+              "assumptions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "exclusions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "nextSteps": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
       }
     }
   }

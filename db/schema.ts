@@ -6,3 +6,4 @@ export const messages=sqliteTable('messages',{id:text('id').primaryKey(),session
 export const productDetails=sqliteTable('product_details',{id:text('id').primaryKey(),payload:text('payload').notNull(),updated:integer('updated').notNull()});
 export const catalogPages=sqliteTable('catalog_pages',{page:integer('page').primaryKey(),payload:text('payload').notNull(),updated:integer('updated').notNull()});
 export const agentLocks=sqliteTable('agent_locks',{sessionId:text('session_id').primaryKey(),token:text('token').notNull(),expires:integer('expires').notNull()});
+export const solutions=sqliteTable('solutions',{id:text('id').primaryKey(),sessionId:text('session_id').notNull(),payload:text('payload').notNull(),status:text('status').notNull(),selectedKey:text('selected_key'),operationToken:text('operation_token'),expires:integer('expires').notNull(),created:integer('created').notNull()},t=>[index('idx_solutions_session').on(t.sessionId)]);

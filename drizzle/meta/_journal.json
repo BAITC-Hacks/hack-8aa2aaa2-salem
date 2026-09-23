@@ -15,6 +15,13 @@
       "when": 1790157484973,
       "tag": "0001_complete_surge",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790162707334,
+      "tag": "0002_old_albert_cleary",
+      "breakpoints": true
     }
   ]
 }

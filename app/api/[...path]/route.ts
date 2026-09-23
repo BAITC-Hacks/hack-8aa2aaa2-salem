@@ -1,4 +1,4 @@
-import {ApiError,json,checkOrigin,body,session,bootstrap,getCatalog,loadNextPage,detail,getCart,propose,confirm,removeCartItem,alternatives,chat} from '@/lib/server';
+import {ApiError,json,checkOrigin,body,session,bootstrap,getCatalog,loadNextPage,detail,getCart,propose,confirm,removeCartItem,alternatives,chat,selectSolution} from '@/lib/server';
 export const dynamic='force-dynamic';
 async function handle(req:Request){try{const path=new URL(req.url).pathname.replace(/^\/api\//,'').split('/');if(req.method==='POST')checkOrigin(req);if(path[0]==='session'&&req.method==='POST')return await bootstrap(req);const s=await session(req);
  if(req.method==='GET'){
@@ -12,6 +12,7 @@ async function handle(req:Request){try{const path=new URL(req.url).pathname.repl
   if(path[0]==='proposals'&&path.length===1)return json(await propose(s.id,String(data.productId??''),data.quantity),201);
   if(path[0]==='proposals'&&path[2]==='confirm')return json(await confirm(s.id,path[1],data.confirmed));
   if(path.join('/')==='cart/remove')return json(await removeCartItem(s.id,String(data.productId??''),data.confirmed));
+  if(path[0]==='solutions'&&path.length===3&&path[2]==='select')return json(await selectSolution(s.id,path[1],data.optionKey,data.confirmed));
   if(path[0]==='chat')return json(await chat(s.id,data.text,data.productId));
  }
  throw new ApiError(404,'NOT_FOUND','Метод не найден.');
