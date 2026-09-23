@@ -34,7 +34,8 @@ assert req(a, 'cart')[1]['itemCount'] == 2
 assert req(a, path, {'confirmed':True})[1]['cart']['itemCount'] == 2
 assert req(b, 'cart')[1]['itemCount'] == 0
 assert req(a, 'proposals', {'productId':p['id'],'quantity':100000})[0] == 409
-assert req(a, 'chat', {'text':'да, добавь'})[0] == 200
+assert req(a, 'chat', {'text':'да, добавь'})[0] == 409
+assert req(a, 'conversation/resume', {})[0] == 200
 assert req(a, 'cart')[1]['itemCount'] == 2
 assert req(a, 'cart/remove', {'productId':p['id'],'confirmed':False})[0] == 422
 assert req(a, 'cart/remove', {'productId':p['id'],'confirmed':True})[1]['itemCount'] == 0

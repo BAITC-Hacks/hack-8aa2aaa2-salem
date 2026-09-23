@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';
+import {permitsCartSelection,permitsCartEdit,matchesCartTarget,matchesOptionChoice,usefulSuggestions} from '../lib/conversation.ts';
+import {runAgent,validateTool} from '../lib/agent.ts';
+
+for(const text of ['Добавь выбранные товары','Беру тот, что дешевле','Положи второй комплект в корзину'])assert(permitsCartSelection(text,false),text);
+for(const text of ['Не добавляй','Если я выбираю бюджетный','Добавь бюджетный, но не сейчас','Почему не добавилось?','Можно добавить?','Да, но потом'])assert(!permitsCartSelection(text,true),text);
+assert(!permitsCartSelection('да',false));assert(permitsCartSelection('да',true));
+assert(!matchesOptionChoice('Добавь выбранное','budget',['budget','extended']));
+assert(matchesOptionChoice('Беру тот, что дешевле','budget',['budget','extended']));
+assert(!matchesOptionChoice('Беру тот, что дешевле','extended',['budget','extended']));
+assert(matchesOptionChoice('Добавь выбранное','budget',['budget']));
+assert(permitsCartEdit('Удали товар 027022',0));assert(!permitsCartEdit('Не удаляй товар',0));
+assert(permitsCartEdit('Поставь количество 3 штуки',3));assert(!permitsCartEdit('Поставь количество 3 штуки',30));
+const items=[{product:{id:'10',sku:'027022'}},{product:{id:'11',sku:'027024'}}];
+assert(matchesCartTarget('Удали 027024','11',items,null));assert(!matchesCartTarget('Удали 027024','10',items,null));assert(!matchesCartTarget('Удали это','10',items,null));assert(!matchesCartTarget('Удали 027022 и 027024','10',items,null));
+assert.deepEqual(usefulSuggestions([{label:'Сделать короче',text:'Сократи текст'}],'needs_input'),[]);
+assert.deepEqual(usefulSuggestions([{label:'Ответ',text:'Да'}],'complete'),[]);
+assert.throws(()=>validateTool('finish',{text:'Готово',productIds:[],suggestions:[]}));
+assert.throws(()=>validateTool('set_cart_quantity',{id:'10',quantity:-1}));
+const call=(name,args)=>({type:'function_call',call_id:crypto.randomUUID(),name,arguments:JSON.stringify(args)});
+let writes=0,reads=0;
+const receipt={text:'Добавлено сервером',mode:'agent',products:[],steps:[],suggestions:[],conversationStatus:'completed',outcome:'complete',cart:{items:[],itemCount:2,total:10,url:'/?view=cart'}};
+const services={search:async()=>({items:[]}),detail:async()=>null,alternatives:async()=>({items:[]}),prepare:async()=>null,cart:async()=>{reads++;return {items:[],availableSelections:[{id:'saved'}]};},applySelection:async()=>{writes++;return receipt;}};
+async function execute(outputs,extra={}){return runAgent({key:'test',model:'test',context:null,history:[],services:{...services,...extra},transport:async()=>{assert(outputs.length,'No additional model call after cart mutation');return Response.json({status:'completed',output:[outputs.shift()]});}});}
+const done=await execute([call('finish',{text:'Готовый текст электрику.',outcome:'complete',productIds:[],suggestions:[{label:'Сократить',text:'Сократи текст',kind:'reply'}]})]);
+assert.equal(done.conversationStatus,'completed');assert.deepEqual(done.suggestions,[]);
+assert.equal((await execute([call('apply_cart_selection',{selectionId:'saved',optionKey:'budget'})])).outcome,'needs_input');assert.equal(writes,0);
+assert.deepEqual(await execute([call('read_cart',{}),call('apply_cart_selection',{selectionId:'saved',optionKey:'budget'})]),receipt);assert.equal(writes,1);assert.equal(reads,1);
+const failed=await execute([call('read_cart',{}),call('apply_cart_selection',{selectionId:'saved',optionKey:'budget'})],{applySelection:async()=>{throw Error('Цена изменилась. Корзина не изменена.');}});
+assert.equal(failed.conversationStatus,'active');assert.match(failed.text,/Цена изменилась/);assert.equal(failed.cart,undefined);
+console.log('PASS conversation: intent, refusals, exact cart targets, terminal replies, read-before-write and authoritative receipts');

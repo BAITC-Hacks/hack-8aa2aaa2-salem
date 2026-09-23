@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "ЭКТ Каталог API прототипа",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "description": "Каталог ekt.kz и агент подбора комплектов. Явный выбор готового варианта автоматически добавляет его в тестовую корзину. Реальные заказы не создаются."
   },
   "servers": [
@@ -40,13 +40,25 @@
                       }
                     },
                     "mode": {
-                      "const": "catalog"
+                      "type": "string",
+                      "enum": [
+                        "agent",
+                        "catalog"
+                      ]
+                    },
+                    "conversationStatus": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "completed"
+                      ]
                     }
                   },
                   "required": [
                     "cart",
                     "catalog",
-                    "messages"
+                    "messages",
+                    "conversationStatus"
                   ]
                 }
               }
@@ -512,6 +524,20 @@
                     },
                     "replayed": {
                       "type": "boolean"
+                    },
+                    "conversationStatus": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "completed"
+                      ]
+                    },
+                    "outcome": {
+                      "type": "string",
+                      "enum": [
+                        "needs_input",
+                        "complete"
+                      ]
                     }
                   },
                   "required": [
@@ -556,7 +582,7 @@
             }
           }
         },
-        "description": "Модель готовит варианты без изменения корзины. Точные фразы «Выбираю бюджетный» / «Выбираю расширенный» обрабатываются сервером как выбор последнего комплекта и добавляют его целиком. Одного «да» недостаточно. Подбор ограничен загруженной выборкой; максимум 6 обязательных позиций и 2 варианта. 60 модельных запросов/час; один одновременно. 409 — цена/остаток/состав изменились, 410 — подбор устарел."
+        "description": "Завершённый разговор возвращает 409 CONVERSATION_COMPLETED; сначала POST /conversation/resume. Явное согласие с показанным предложением или выбор комплекта добавляет товары без второго подтверждения. Прямое указание позволяет изменить количество или удалить одну существующую позицию. outcome=complete завершает задачу; suggestions пустой. Изменения корзины возвращают авторитетную квитанцию и cart."
       }
     },
     "/solutions/{id}/select": {
@@ -641,6 +667,92 @@
           },
           "422": {
             "description": "Нет явного выбора или неверный вариант"
+          }
+        }
+      }
+    },
+    "/conversation/resume": {
+      "post": {
+        "summary": "Возобновить разговор с сохранением истории и корзины",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Состояние сохранено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "conversationStatus": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "completed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "conversationStatus"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Предыдущий ответ ещё обрабатывается"
+          }
+        }
+      }
+    },
+    "/conversation/complete": {
+      "post": {
+        "summary": "Завершить разговор без удаления данных",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Состояние сохранено",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "conversationStatus": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "completed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "conversationStatus"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Предыдущий ответ ещё обрабатывается"
           }
         }
       }
