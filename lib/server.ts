@@ -76,8 +76,8 @@ export async function chat(sid:string,text:unknown,contextId?:unknown){
   await saveMessage(sid,'user',{text:text.trim()});
   if(/^(?:да[ ,!]*|подтверждаю[.!]*|да[ ,]+(?:добавь|добавляй|подтверждаю)[.!]*|иә[ ,]+қос[.!]*)$/iu.test(text.trim())){
    const pending=await db().prepare("SELECT id,product_json,quantity,price,expires FROM proposals WHERE session_id=? AND status='pending' AND expires>? ORDER BY created DESC LIMIT 1").bind(sid,Date.now()).first<{id:string;product_json:string;quantity:number;price:number;expires:number}>();
-   const result=pending?{text:'Предложение готово. Проверьте товар и количество и нажмите кнопку подтверждения ниже. До этого корзина не изменится.',mode:'agent',products:[],steps:[],suggestions:[],proposal:{id:pending.id,product:JSON.parse(pending.product_json),quantity:pending.quantity,total:Math.round(pending.price*pending.quantity*100)/100,expiresAt:new Date(pending.expires).toISOString()}}:{text:'Уточните, какой товар и сколько единиц добавить. Например: «Подготовь 2 штуки Legrand 027022». Сначала покажу предложение для подтверждения.',mode:'agent',products:[],steps:[],suggestions:[]};
-   await saveMessage(sid,'assistant',result);return result;
+   const lastMessage=rows.results.at(-1);const offered=lastMessage?.role==='assistant'?JSON.parse(lastMessage.content_json).proposal?.id:undefined;
+   if(pending&&offered===pending.id){const result={text:'Предложение готово. Проверьте товар и количество и нажмите кнопку подтверждения ниже. До этого корзина не изменится.',mode:'agent',products:[],steps:[],suggestions:[],proposal:{id:pending.id,product:JSON.parse(pending.product_json),quantity:pending.quantity,total:Math.round(pending.price*pending.quantity*100)/100,expiresAt:new Date(pending.expires).toISOString()}};await saveMessage(sid,'assistant',result);return result;}
   }
   history.push({role:'user',content:text.trim()});
   const memo=new Map<string,Product>();

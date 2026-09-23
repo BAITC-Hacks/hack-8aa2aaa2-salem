@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import {validateSuggestions,readSuggestions,composeSuggestion,hasUnfilledFields} from '../lib/chat-suggestions.ts';
+const fill={label:'Указать маркировку',text:'На корпусе написано: [маркировка]',kind:'fill'};
+const reply={label:'Не знаю маркировку',text:'Не знаю маркировку. Где её можно безопасно посмотреть?',kind:'reply'};
+assert.deepEqual(validateSuggestions([fill,reply]),[fill,reply]);
+for(const text of ['Какой у вас автомат?','Какая маркировка?','Уточните бюджет','Напишите параметры'])assert.throws(()=>validateSuggestions([{label:'Ответ',text,kind:'reply'}]));
+assert.throws(()=>validateSuggestions([{...fill,text:'На корпусе написано:'}]));
+assert.throws(()=>validateSuggestions([{...reply,text:'Бюджет [сумма]'}]));
+assert.throws(()=>validateSuggestions([fill,fill]));
+assert.deepEqual(readSuggestions(['Какой у вас автомат?','Показать аналоги']),[{label:'Показать аналоги',text:'Показать аналоги',kind:'reply'}]);
+assert.equal(validateSuggestions([{...reply,text:'Где посмотреть маркировку?'}]).length,1);
+const initial=composeSuggestion('',fill);assert.equal(initial.text.slice(initial.start,initial.end),'[маркировка]');
+assert.equal(hasUnfilledFields(initial.text,initial.placeholders),true);
+assert.equal(hasUnfilledFields(initial.text.replace('[маркировка]','Legrand 027022'),initial.placeholders),false);
+const merged=composeSuggestion('У меня сломался выключатель',fill);assert.equal(merged.text,'У меня сломался выключатель\n'+fill.text);
+assert.equal(composeSuggestion(merged.text,fill).text,merged.text);
+const multiple=composeSuggestion(merged.text,{label:'Бюджет',text:'Бюджет: [сумма]',kind:'fill'});assert.equal(multiple.placeholders.length,2);
+assert.equal(hasUnfilledFields(multiple.text.replace('[маркировка]','027022'),multiple.placeholders),true);
+assert.throws(()=>composeSuggestion('x'.repeat(2000),fill));
+assert.equal(composeSuggestion('',reply).start,reply.text.length);
+console.log('PASS reply drafts: typed validation, assistant-question filtering, legacy messages, caret, draft preservation, duplicates and incomplete-field guards');
+
+assert.equal(composeSuggestion(fill.text,reply,fill).text,reply.text);
+assert.equal(composeSuggestion('Мой текст\n'+fill.text,reply,fill).text,'Мой текст\n'+reply.text);
+assert.equal(composeSuggestion('На корпусе написано: 027022',reply,fill).text,'На корпусе написано: 027022\n'+reply.text);

@@ -16,7 +16,7 @@ const calls=[];let prepared=0;
 const services={search:async()=>({items:[p],total:1}),detail:async()=>p,alternatives:async()=>({items:[],message:'No matches'}),cart:async()=>({items:[]}),prepare:async()=>{prepared++;return {id:'proposal',product:p,quantity:2};}};
 const call=(name,args)=>({type:'function_call',call_id:crypto.randomUUID(),name,arguments:JSON.stringify(args)});
 let outputs=[call('get_product',{id:'123'}),call('prepare_cart',{id:'123',quantity:2}),call('finish',{text:'Подтвердите предложение.',productIds:['123'],suggestions:[]})];
-const transport=async(url,options)=>{assert.equal(url,'https://api.openai.com/v1/responses');const body=JSON.parse(options.body);assert.equal(body.store,false);calls.push(body);return Response.json({status:'completed',output:[outputs.shift()]});};
+const transport=async(url,options)=>{assert.equal(url,'https://api.openai.com/v1/responses');const body=JSON.parse(options.body);assert.equal(body.store,false);assert.equal(body.reasoning.effort,'low');calls.push(body);return Response.json({status:'completed',output:[outputs.shift()]});};
 const config={key:'test',model:'test',history:[{role:'user',content:'Подготовь две штуки'}],context:null,services,transport};
 const result=await runAgent(config);
 assert.equal(result.proposal.quantity,2);assert.equal(prepared,1);assert.equal(result.steps.length,2);
@@ -30,3 +30,8 @@ assert.equal((await runAgent(config)).steps[0].ok,false);assert.equal(prepared,1
 await assert.rejects(runAgent({...config,transport:async()=>Response.json({error:{code:'insufficient_quota'}},{status:429})}),/AGENT_QUOTA/);
 await assert.rejects(runAgent({...config,transport:async()=>Response.json({status:'completed',output:[]})}),/AGENT_NO_RESULT/);
 console.log('PASS agent: numeric filters, tool validation, bounded actions, output provenance, confirmation separation, quota handling');
+
+outputs=[call('finish',{text:'Уточните маркировку.',productIds:[],suggestions:[{label:'Указать маркировку',text:'На корпусе: [маркировка]',kind:'fill'}]})];
+const clarification=await runAgent(config);assert.equal(clarification.suggestions[0].kind,'fill');
+outputs=[call('finish',{text:'Уточните данные.',productIds:[],suggestions:[{label:'Ответить',text:'Какой у вас автомат?',kind:'reply'}]}),call('finish',{text:'Какая маркировка на корпусе?',productIds:[],suggestions:[{label:'Указать маркировку',text:'Маркировка: [данные]',kind:'fill'}]})];
+const corrected=await runAgent(config);assert.equal(corrected.steps[0].ok,false);assert.equal(corrected.suggestions[0].text,'Маркировка: [данные]');

@@ -48,3 +48,6 @@ next-env.d.ts
 .dev.vars*
 !.env.example
 *.tsbuildinfo
+
+# Original user-provided font; served copy lives under public/fonts.
+/SF-Pro-Display.woff

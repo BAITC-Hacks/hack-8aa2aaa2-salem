@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "ЭКТ Каталог API прототипа",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "description": "Каталог ekt.kz и агент подбора комплектов. Явный выбор готового варианта автоматически добавляет его в тестовую корзину. Реальные заказы не создаются."
   },
   "servers": [
@@ -469,8 +469,10 @@
                     },
                     "suggestions": {
                       "type": "array",
+                      "maxItems": 3,
+                      "description": "Редактируемые черновики реплик клиента. Кнопка заполняет поле, никогда не отправляет сообщение. Старые сохранённые строковые подсказки поддерживаются интерфейсом.",
                       "items": {
-                        "type": "string"
+                        "$ref": "#/components/schemas/ChatSuggestion"
                       }
                     },
                     "proposal": {
@@ -1048,6 +1050,33 @@
                 }
               }
             }
+          }
+        }
+      },
+      "ChatSuggestion": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "label",
+          "text",
+          "kind"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 240
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "fill",
+              "reply"
+            ],
+            "description": "fill содержит [поле для заполнения], reply — полная реплика клиента без шаблонных полей."
           }
         }
       }
